@@ -23,6 +23,8 @@ import org.springframework.integration.dsl.channel.MessageChannels;
 import org.springframework.integration.dsl.core.Pollers;
 import org.springframework.integration.feed.inbound.FeedEntryMessageSource;
 import org.springframework.integration.json.ObjectToJsonTransformer;
+import org.springframework.integration.metadata.MetadataStore;
+import org.springframework.integration.metadata.PropertiesPersistingMetadataStore;
 import org.springframework.integration.scheduling.PollerMetadata;
 import org.springframework.integration.transformer.GenericTransformer;
 import org.springframework.messaging.MessageChannel;
@@ -37,9 +39,9 @@ import java.net.URL;
 
 /**
  * extract payload
- * <p>
+ * <p/>
  * GenericMessage [payload={"uri":"316529","link":"http://www.rotoworld.com/player/nfl/10358/duke-johnson","comments":null,"updatedDate":1441395000000,"title":"Duke Johnson still in NFL concussion protocol - Duke Johnson | CLE","description":null,"links":[{"href":"http://www.rotoworld.com/player/nfl/10358/duke-johnson","rel":"alternate","type":null,"hreflang":null,"title":null,"length":0}],"contents":[{"type":"text","value":"Duke Johnson remains in the NFL's concussion protocol.","mode":null,"interface":"com.rometools.rome.feed.synd.SyndContent"}],"modules":[{"uri":"http://purl.org/dc/elements/1.1/","title":null,"creator":null,"subject":null,"description":null,"publisher":null,"contributors":[],"date":null,"type":null,"format":null,"identifier":null,"source":null,"language":null,"relation":null,"coverage":null,"rights":null,"sources":[],"titles":[],"creators":[],"descriptions":[],"publishers":[],"contributor":null,"identifiers":[],"languages":[],"relations":[],"coverages":[],"rightsList":[],"types":[],"dates":[],"subjects":[],"formats":[],"interface":"com.rometools.rome.feed.module.DCModule"}],"enclosures":[],"authors":[],"contributors":[],"source":null,"foreignMarkup":[],"wireEntry":null,"categories":[],"titleEx":{"type":"text","value":"Duke Johnson still in NFL concussion protocol - Duke Johnson | CLE","mode":null,"interface":"com.rometools.rome.feed.synd.SyndContent"},"interface":"com.rometools.rome.feed.synd.SyndEntry","publishedDate":null,"author":""}, headers={id=76495d5d-6cc2-ae17-ea17-cb04a7637e02, json__TypeId__=class com.rometools.rome.feed.synd.SyndEntryImpl, contentType=application/json, timestamp=1441438129762}]
- * <p>
+ * <p/>
  * convert payload to message for slack
  * send message to slack
  */
@@ -48,6 +50,7 @@ public class RotoWorldNewsStreamerApplication {
 
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(RotoWorldNewsStreamerApplication.class);
+    private final int rotoWorldPlayerNewsFeedDelay = 1000 * 60;
 
     public static void main(String[] args) {
         final ConfigurableApplicationContext applicationContext =
@@ -60,14 +63,22 @@ public class RotoWorldNewsStreamerApplication {
 
         URL feedUrl =
             new URL("http://www.rotoworld.com/rss/feed.aspx?sport=nfl&ftype=news&format=atom");
-        return new FeedEntryMessageSource(feedUrl, "rotoplayernews");
+        final FeedEntryMessageSource rotoplayernewsSource =
+            new FeedEntryMessageSource(feedUrl, "rotoplayernews");
+        rotoplayernewsSource.setMetadataStore(getMetaDataStore());
+        return rotoplayernewsSource;
 
+    }
+
+    @Bean public MetadataStore getMetaDataStore() {
+        return new PropertiesPersistingMetadataStore();
     }
 
     @Bean public IntegrationFlow playerNewsFlow() throws MalformedURLException {
 
         return IntegrationFlows.from(playerNewsFeedMessageSource(),
-            c -> c.poller(Pollers.fixedRate(100).maxMessagesPerPoll(20)).autoStartup(true))
+            c -> c.poller(Pollers.fixedRate(rotoWorldPlayerNewsFeedDelay).maxMessagesPerPoll(20))
+                .autoStartup(true))
             .transform(new ObjectToJsonTransformer(ObjectToJsonTransformer.ResultType.NODE))
             .transform(getPlayerNewsEnricher()).transform(getSlackMessageTransformer())
             .channel(getSlackMessageQueue()).get();
@@ -127,7 +138,6 @@ public class RotoWorldNewsStreamerApplication {
             }
         }
     }*/
-
 
 
 
