@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mobileforming.news.streamer.data.model.PlayerNews;
 import com.mobileforming.news.streamer.rotoworld.RotoWorldNewsEnricher;
-import com.mobileforming.news.streamer.slack.SlackMessageTransformer;
+import com.mobileforming.news.streamer.slack.AdNewsSlackMessageTransformer;
+import com.mobileforming.news.streamer.slack.PlayerNewsSlackMessageTransformer;
+import com.mobileforming.news.streamer.slack.SlackMessageSettings;
 import com.mobileforming.news.streamer.slack.SlackMessenger;
 import com.rometools.rome.feed.synd.SyndEntry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -16,6 +19,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.annotation.IntegrationComponentScan;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.channel.QueueChannel;
+import org.springframework.integration.channel.interceptor.WireTap;
 import org.springframework.integration.core.MessageSource;
 import org.springframework.integration.dsl.IntegrationFlow;
 import org.springframework.integration.dsl.IntegrationFlows;
@@ -27,6 +31,7 @@ import org.springframework.integration.metadata.MetadataStore;
 import org.springframework.integration.metadata.PropertiesPersistingMetadataStore;
 import org.springframework.integration.scheduling.PollerMetadata;
 import org.springframework.integration.transformer.GenericTransformer;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
@@ -50,7 +55,19 @@ public class RotoWorldNewsStreamerApplication {
 
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(RotoWorldNewsStreamerApplication.class);
+    private static final String DEFAULT_CHANNEL = "@jeffrey";
+    private static final String DEFAULT_SLACKBOT_NAME = "RotoBot";
+    private static final String DEFAULT_ICON_NAME = ":football:";
+    private static final String DEFAULT_MODE = "prod";
     private final int rotoWorldPlayerNewsFeedDelay = 1000 * 60;
+    private final String mode;
+
+    @Autowired private SlackMessageSettings slackMessageSettings;
+
+
+    public RotoWorldNewsStreamerApplication() {
+        this.mode = DEFAULT_MODE;
+    }
 
     public static void main(String[] args) {
         final ConfigurableApplicationContext applicationContext =
@@ -65,7 +82,9 @@ public class RotoWorldNewsStreamerApplication {
             new URL("http://www.rotoworld.com/rss/feed.aspx?sport=nfl&ftype=news&format=atom");
         final FeedEntryMessageSource rotoplayernewsSource =
             new FeedEntryMessageSource(feedUrl, "rotoplayernews");
-        rotoplayernewsSource.setMetadataStore(getMetaDataStore());
+        if("prod".equals(mode.toLowerCase())) {
+            rotoplayernewsSource.setMetadataStore(getMetaDataStore());
+        }
         return rotoplayernewsSource;
 
     }
@@ -95,9 +114,23 @@ public class RotoWorldNewsStreamerApplication {
 
     }
 
-    @Bean public QueueChannel getSlackMessageQueue() {
-        return MessageChannels.queue("slack_messages", 20).get();
+    @Bean public IntegrationFlow sendAdMessageFlow() {
+
+        return IntegrationFlows.from(getSlackMessageQueueTapChannel())
+            .transform(getAdMessageTransformer()).handle(newsHandler()).get();
+
     }
+
+    @Bean public QueueChannel getSlackMessageQueue() {
+        return MessageChannels.queue("slack_messages", 20)
+            .interceptor(new WireTap(getSlackMessageQueueTapChannel())).get();
+    }
+
+    @Bean public MessageChannel getSlackMessageQueueTapChannel() {
+        return MessageChannels.queue("tapped_slack_messages", 20).get();
+    }
+
+
 
     @Bean public MessageChannel loggingChannel() {
         return new DirectChannel();
@@ -108,7 +141,11 @@ public class RotoWorldNewsStreamerApplication {
     }
 
     @Bean public GenericTransformer<PlayerNews, String> getSlackMessageTransformer() {
-        return new SlackMessageTransformer(getJsonMapper());
+        return new PlayerNewsSlackMessageTransformer(getJsonMapper(), slackMessageSettings);
+    }
+
+    @Bean public GenericTransformer<String, Message<?>> getAdMessageTransformer() {
+        return new AdNewsSlackMessageTransformer(getJsonMapper(), slackMessageSettings);
     }
 
     @Bean public MessageHandler newsHandler() {
@@ -121,23 +158,6 @@ public class RotoWorldNewsStreamerApplication {
         return new ObjectMapper();
 
     }
-
-
-/*
-    static class MyMessageHandler extends AbstractMessageHandler {
-
-        private final static AtomicInteger newsCounter = new AtomicInteger(0);
-        private final static ObjectMapper MAPPER = new ObjectMapper();
-
-        @Override protected void handleMessageInternal(Message<?> message) throws Exception {
-            final Object payload = message.getPayload();
-            if (payload != null) {
-                System.out.println("Message object received []" + newsCounter.incrementAndGet());
-                System.out
-                    .println(String.format("Message -> %s", MAPPER.writeValueAsString(payload)));
-            }
-        }
-    }*/
 
 
 

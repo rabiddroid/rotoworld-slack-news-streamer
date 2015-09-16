@@ -1,6 +1,7 @@
 package com.mobileforming.news.streamer.slack;
 
 import org.apache.commons.httpclient.HttpStatus;
+import org.apache.commons.lang.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
@@ -26,9 +27,10 @@ public class SlackMessenger extends AbstractMessageHandler {
     private final static AtomicInteger newsCounter = new AtomicInteger();
     private final CloseableHttpClient httpClient = HttpClients.createDefault();
 
+
     @Override protected void handleMessageInternal(Message<?> message) throws Exception {
         final String payload = (String) message.getPayload();
-        if (payload != null) {
+        if (StringUtils.isNotEmpty(payload)) {
             LOG.info("Message object received [{}]", newsCounter.incrementAndGet());
 
 
@@ -36,6 +38,7 @@ public class SlackMessenger extends AbstractMessageHandler {
 
             httpPost.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
             CloseableHttpResponse response = httpClient.execute(httpPost);
+
             try {
                 if (response.getStatusLine().getStatusCode() != HttpStatus.SC_OK) {
                     HttpEntity entity = response.getEntity();

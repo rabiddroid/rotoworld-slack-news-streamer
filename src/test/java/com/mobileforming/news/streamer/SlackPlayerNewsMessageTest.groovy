@@ -4,7 +4,7 @@ import com.mobileforming.news.streamer.data.model.Player
 import com.mobileforming.news.streamer.data.model.PlayerBuilder
 import com.mobileforming.news.streamer.data.model.PlayerNews
 import com.mobileforming.news.streamer.data.model.PlayerNewsBuilder
-import com.mobileforming.news.streamer.slack.SlackMessageTransformer
+import com.mobileforming.news.streamer.slack.PlayerNewsSlackMessageTransformer
 import org.skyscreamer.jsonassert.JSONAssert
 
 /**
@@ -32,7 +32,7 @@ class SlackPlayerNewsMessageTest extends spock.lang.Specification {
 
 
         setup:
-        SlackMessageTransformer slackPlayerNewsMessage = new SlackMessageTransformer(playerNews);
+        PlayerNewsSlackMessageTransformer slackPlayerNewsMessage = new PlayerNewsSlackMessageTransformer(playerNews);
 
         when:
         String actualSlackMessage = slackPlayerNewsMessage.getMessage();
