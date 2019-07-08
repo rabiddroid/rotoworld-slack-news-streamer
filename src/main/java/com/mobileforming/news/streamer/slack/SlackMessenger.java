@@ -20,8 +20,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class SlackMessenger extends AbstractMessageHandler {
 
-    private static final String SLACK_URL =
-        "https://hooks.slack.com/services/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";
+    private static final String SLACK_URL =;//change code to supply this value during runtime
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(SlackMessenger.class);
     private final static AtomicInteger newsCounter = new AtomicInteger();
